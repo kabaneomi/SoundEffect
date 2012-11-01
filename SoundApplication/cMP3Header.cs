@@ -41,6 +41,16 @@ namespace SoundApplication
         SingleChannel,        //! Monoral.
     }
 
+    //! ModeExtension-Bit.
+    //! ModeBit DualChannel ON.
+    public enum eModeExtension
+    {
+        Subband4 = 0,
+        Subband8,
+        Subband12,
+        Subband16,
+    }
+
     public struct sMP3Data
     {
         public int frame_bit;  //! mp3 header frame.
@@ -52,6 +62,7 @@ namespace SoundApplication
         public int padding_bit;    //! 0 = None, 1 = Add.
         public int private_bit;    //! 0 = None, 1 = Use.
         public eModeBit mode_bit;
+        public eModeExtension modeEx_bit;
     }
 
     public class cMP3Header
@@ -175,10 +186,15 @@ namespace SoundApplication
             
             //! Mode Bit.
             int mode_bit = data.frame_bit & 0x000000C0;
-            Console.Write("mode_bit：0x{0:x8} {1}\n", mode_bit, sizeof(int));
             mode_bit = mode_bit >> 6;
-            Console.Write("mode_bit shift：0x{0:x8} {1}\n", mode_bit, sizeof(int));
             data.mode_bit = (eModeBit)mode_bit;
+
+            //! ModeExtension Bit.
+            int modeEx_bit = data.frame_bit & 0x00000030;
+            Console.Write("modeEx_bit：0x{0:x8} {1}\n", modeEx_bit, sizeof(int));
+            modeEx_bit = modeEx_bit >> 4;
+            Console.Write("modeEx_bit shift：0x{0:x8} {1}\n", modeEx_bit, sizeof(int));
+            data.modeEx_bit = (eModeExtension)modeEx_bit;
         }
     }
 }
