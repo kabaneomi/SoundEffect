@@ -3,35 +3,68 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.IO;
+using System.Diagnostics;
 
 namespace SoundApplication
 {
     //! ID-bit.
     public enum eIDBit
     {
-        eIDBit_LSF = 0,
-        eIDBit_HSF,
+        LSF = 0,    //! MPEG-2.
+        HSF,        //! MPEG-1.
     }
 
     //! Layer.
     public enum eLayerBit
     {
-        eLayerBit_Reserve = 0,
-        eLayerBit_Third,           //! Layer3.
-        eLayerBit_Second,          //! Layer2.
-        eLayerBit_First,           //! Layer1.
+        Reserve = 0,
+        Layer3,           //! Layer3.
+        Layer2,           //! Layer2.
+        Layer1,           //! Layer1.
     }
 
-    public struct cMP3Data
+    //! Protection-Bit.
+    public enum eProtectionBit
+    {
+        ISOProt0_Layer1 = 0,  //! Layer1 : CRC Error Protect.
+        ISOProt1_Layer1,      //! Layer1 : None.
+        ISOProt0_Layer2or3,   //! Layer2or3 : CRC Error Protect.
+        ISOProt1_Layer2or3,   //! Layer2or3 : None.
+    }
+
+    //! Mode-Bit.
+    public enum eModeBit
+    {
+        Stereo = 0,
+        JointStereo,
+        DualChannel,          //! Stereo.
+        SingleChannel,        //! Monoral.
+    }
+
+    public struct sMP3Data
     {
         public int frame_bit;  //! mp3 header frame.
         public eIDBit id_bit;
         public eLayerBit layer_bit;
+        public eProtectionBit protection_bit;
+        public int bitrate;
+        public int sampling;
+        public int padding_bit;    //! 0 = None, 1 = Add.
+        public int private_bit;    //! 0 = None, 1 = Use.
+        public eModeBit mode_bit;
     }
 
-    class cMP3Header
+    public class cMP3Header
     {
-        public void readMp3Data(ref cMP3Data data, string filename)
+        //! Bitrate Table.
+        private int[] bitrateTableLSF = new int[] { 0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 64, 128, 144, 160, 0 };
+        private int[] bitrateTableHSF = new int[] { 0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0 };
+
+        //! Sampling Frequency.
+        private int[] samplingLSF = new int[] { 22050, 24000, 16000, 0 };
+        private int[] samplingHSF = new int[] { 44100, 48000, 32000, 0 };
+
+        public void readMp3Data(ref sMP3Data data, string filename)
         {
             //! file open.
             FileStream fs = new FileStream(filename, FileMode.Open, FileAccess.Read);
@@ -62,10 +95,90 @@ namespace SoundApplication
 
             //! get Layer-bit.
             int layer_bit = data.frame_bit & 0x00060000;
-            Console.Write("layer_bit：0x{0:x8} {1}\n", layer_bit, sizeof(int));
             layer_bit = layer_bit >> 17;
-            Console.Write("layer_bit shift：0x{0:x8} {1}\n", layer_bit, sizeof(int));
             data.layer_bit = (eLayerBit)layer_bit;
+
+            //! Protection-Bit.
+            int protection_bit = data.frame_bit & 0x00010000;
+            protection_bit = protection_bit >> 16;
+            switch (data.layer_bit)
+            {
+                case eLayerBit.Layer3:
+                case eLayerBit.Layer2:
+                    if(protection_bit == 0)
+                    {
+                        data.protection_bit = eProtectionBit.ISOProt0_Layer2or3;
+                    }
+                    else
+                    {
+                        data.protection_bit = eProtectionBit.ISOProt1_Layer2or3;
+                    }
+                    break;
+                case eLayerBit.Layer1:
+                    if (protection_bit == 0)
+                    {
+                        data.protection_bit = eProtectionBit.ISOProt0_Layer1;
+                    }
+                    else
+                    {
+                        data.protection_bit = eProtectionBit.ISOProt1_Layer1;
+                    }
+                    break;
+                default:
+                    Debug.Assert(false, "Protection Bit None?");
+                    break;
+            }
+
+            //! Bitrate.
+            int bitrate_bit = data.frame_bit & 0x0000F000;
+            bitrate_bit = bitrate_bit >> 12;
+            switch (data.id_bit)
+            {
+                case eIDBit.LSF:
+                    data.bitrate = bitrateTableLSF[bitrate_bit];
+                    break;
+                case eIDBit.HSF:
+                    data.bitrate = bitrateTableHSF[bitrate_bit];
+                    break;
+                default:
+                    break;
+            }
+            Console.Write("bitrate：{0}\n", data.bitrate);
+
+            //! Sampling Frequency.
+            int sampling_bit = data.frame_bit & 0x00000C00;
+            sampling_bit = sampling_bit >> 10;
+            switch (data.id_bit)
+            {
+                case eIDBit.LSF:
+                    data.sampling = samplingLSF[sampling_bit];
+                    break;
+                case eIDBit.HSF:
+                    data.sampling = samplingHSF[sampling_bit];
+                    break;
+                default:
+                    break;
+            }
+            Console.Write("sampling：{0}\n", data.sampling);
+
+            //! Padding Bit.
+            int padding_bit = data.frame_bit & 0x00000300;
+            padding_bit = padding_bit >> 9;
+            data.padding_bit = padding_bit;
+
+            //! Private Bit.
+            int private_bit = data.frame_bit & 0x00000100;
+            Console.Write("private_bit：0x{0:x8} {1}\n", private_bit, sizeof(int));
+            private_bit = private_bit >> 8;
+            Console.Write("private_bit shift：0x{0:x8} {1}\n", private_bit, sizeof(int));
+            data.private_bit = private_bit;
+            
+            //! Mode Bit.
+            int mode_bit = data.frame_bit & 0x000000C0;
+            Console.Write("mode_bit：0x{0:x8} {1}\n", mode_bit, sizeof(int));
+            mode_bit = mode_bit >> 6;
+            Console.Write("mode_bit shift：0x{0:x8} {1}\n", mode_bit, sizeof(int));
+            data.mode_bit = (eModeBit)mode_bit;
         }
     }
 }
