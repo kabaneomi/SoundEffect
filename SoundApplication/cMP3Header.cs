@@ -51,6 +51,15 @@ namespace SoundApplication
         Subband16,
     }
 
+    //! Emphasis.
+    public enum eEmphasis
+    {
+        None = 0,       //! emphasis None.
+        FifthFifteen,   //! 50/15us.
+        Reserve,        //! reserve.
+        CCITT_J17,      //! CCITT J17.
+    }
+
     public struct sMP3Data
     {
         public int frame_bit;  //! mp3 header frame.
@@ -63,6 +72,9 @@ namespace SoundApplication
         public int private_bit;    //! 0 = None, 1 = Use.
         public eModeBit mode_bit;
         public eModeExtension modeEx_bit;
+        public int copyright_bit;  //! 0 = None, 1 = Protect.
+        public int original_bit;   //! 0 = copy, 1 = original.
+        public eEmphasis emphasis_bit;
     }
 
     public class cMP3Header
@@ -179,9 +191,7 @@ namespace SoundApplication
 
             //! Private Bit.
             int private_bit = data.frame_bit & 0x00000100;
-            Console.Write("private_bit：0x{0:x8} {1}\n", private_bit, sizeof(int));
             private_bit = private_bit >> 8;
-            Console.Write("private_bit shift：0x{0:x8} {1}\n", private_bit, sizeof(int));
             data.private_bit = private_bit;
             
             //! Mode Bit.
@@ -191,10 +201,23 @@ namespace SoundApplication
 
             //! ModeExtension Bit.
             int modeEx_bit = data.frame_bit & 0x00000030;
-            Console.Write("modeEx_bit：0x{0:x8} {1}\n", modeEx_bit, sizeof(int));
             modeEx_bit = modeEx_bit >> 4;
-            Console.Write("modeEx_bit shift：0x{0:x8} {1}\n", modeEx_bit, sizeof(int));
             data.modeEx_bit = (eModeExtension)modeEx_bit;
+
+            //! Copyright.
+            int copyright_bit = data.frame_bit & 0x00000008;
+            copyright_bit = copyright_bit >> 3;
+            data.copyright_bit = copyright_bit;
+
+            //! Original Check.
+            int original_bit = data.frame_bit & 0x00000004;
+            original_bit = original_bit >> 2;
+            data.original_bit = original_bit;
+
+            //! Emphasis Bit.
+            int emphasis_bit = data.frame_bit & 0x00000003;
+            Console.Write("emphasis_bit：0x{0:x8} {1}\n", emphasis_bit, sizeof(int));
+            data.emphasis_bit = (eEmphasis)emphasis_bit;
         }
     }
 }
