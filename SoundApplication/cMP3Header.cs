@@ -62,6 +62,11 @@ namespace SoundApplication
 
     public struct sMP3Data
     {
+        public string tag_name;
+        public int tag_version;
+        public int tag_flag;
+        public int tag_size;
+
         public int frame_bit;  //! mp3 header frame.
         public eIDBit id_bit;
         public eLayerBit layer_bit;
@@ -92,23 +97,16 @@ namespace SoundApplication
             //! file open.
             FileStream fs = new FileStream(filename, FileMode.Open, FileAccess.Read);
             BinaryReader br = new BinaryReader(fs);
-            Console.Write("mp3ファイル名：{0}\n", filename);
+            Console.Write("mp3 file name：{0}\n", filename);
+
+            //! tag check.
+            FileStream tag_fs = new FileStream(filename, FileMode.Open, FileAccess.Read);
+            checkTag(ref tag_fs, ref br, ref data);
 
             //! get header info.
             byte[] header_byte = new byte[sizeof(int)];
             br.Read(header_byte, 0, sizeof(int));
-            Console.Write("header_byte0：0x{0:x2}\n", header_byte[0]);
-            Console.Write("header_byte1：0x{0:x2}\n", header_byte[1]);
-            Console.Write("header_byte2：0x{0:x2}\n", header_byte[2]);
-            Console.Write("header_byte3：0x{0:x2}\n", header_byte[3]);
-            if (BitConverter.IsLittleEndian)
-            {
-                data.frame_bit = BitConverter.ToInt32(header_byte.Reverse().ToArray(), 0);
-            }
-            else
-            {
-                data.frame_bit = BitConverter.ToInt32(header_byte, 0);
-            }
+            converIntValue(ref data.frame_bit, header_byte, 0);
             Console.Write("header：0x{0:x8} {1}\n", data.frame_bit, sizeof(int));
 
             //! get ID-bit.
@@ -218,6 +216,63 @@ namespace SoundApplication
             int emphasis_bit = data.frame_bit & 0x00000003;
             Console.Write("emphasis_bit：0x{0:x8} {1}\n", emphasis_bit, sizeof(int));
             data.emphasis_bit = (eEmphasis)emphasis_bit;
+        }
+
+        //! tag check.
+        private void checkTag(ref FileStream fs, ref BinaryReader br, ref sMP3Data data)
+        {
+            BinaryReader tag_br = new BinaryReader(fs);
+
+            byte[] tag_byte = new byte[3];
+            tag_br.Read(tag_byte, 0, 3);
+            string tag_name = Encoding.ASCII.GetString(tag_byte);
+            Console.Write("tag：{0}\n", tag_name);
+
+            //! "ID3" check.
+            if (tag_name != "ID3")
+            {
+                data.tag_name = "";
+                return;
+            }
+
+            //! get tag info.
+            br.Read(tag_byte, 0, 3);
+            data.tag_name = Encoding.ASCII.GetString(tag_byte);
+            Console.Write("data.tag_name：{0}\n", data.tag_name);
+
+            //! get tag version.
+            int tag_bit = 0;
+            byte[] tag_version_byte = new byte[4];
+            br.Read(tag_version_byte, 0, 2);
+            converIntValue(ref tag_bit, tag_version_byte, 0);
+            data.tag_version = tag_bit & 0x0000FFFF;
+            Console.Write("data.tag_version：0x{0:x8}\n", data.tag_version);
+
+            //! get tag flag.
+            byte[] tag_flag_byte = new byte[4];
+            br.Read(tag_flag_byte, 0, 1);
+            converIntValue(ref tag_bit, tag_flag_byte, 0);
+            data.tag_flag = tag_bit & 0x000000FF;
+            Console.Write("data.tag_flag：0x{0:x8}\n", data.tag_flag);
+
+            //! get tag size.
+            byte[] tag_size_byte = new byte[4];
+            br.Read(tag_size_byte, 0, 4);
+            converIntValue(ref tag_bit, tag_size_byte, 0);
+            data.tag_size = (int)(tag_bit & 0xf7f7f7f7);
+            Console.Write("data.tag_size：0x{0:x8}, {1}\n", data.tag_size, data.tag_size);
+        }
+
+        private void converIntValue(ref int bit, byte[] info, int size)
+        {
+            if (BitConverter.IsLittleEndian)
+            {
+                bit = BitConverter.ToInt32(info.Reverse().ToArray(), size);
+            }
+            else
+            {
+                bit = BitConverter.ToInt32(info, size);
+            }
         }
     }
 }
