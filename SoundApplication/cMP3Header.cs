@@ -235,32 +235,76 @@ namespace SoundApplication
                 return;
             }
 
-            //! get tag info.
-            br.Read(tag_byte, 0, 3);
-            data.tag_name = Encoding.ASCII.GetString(tag_byte);
-            Console.Write("data.tag_name：{0}\n", data.tag_name);
+            byte[] header_byte = new byte[10];
+            br.Read(header_byte, 0, 10);
+            Console.Write("header_byte：0x{0:x2}{1:x2}{2:x2}{3:x2}{4:x2}{5:x2}{6:x2}{7:x2}{8:x2}{9:x2}\n", header_byte[0], header_byte[1], header_byte[2], header_byte[3], header_byte[4], header_byte[5], header_byte[6], header_byte[7], header_byte[8], header_byte[9]);
 
-            //! get tag version.
-            int tag_bit = 0;
-            byte[] tag_version_byte = new byte[4];
-            br.Read(tag_version_byte, 0, 2);
-            converIntValue(ref tag_bit, tag_version_byte, 0);
-            data.tag_version = tag_bit & 0x0000FFFF;
-            Console.Write("data.tag_version：0x{0:x8}\n", data.tag_version);
+            //! header name.
+            string header_name = Encoding.ASCII.GetString(header_byte, 0, 3);
+            Console.Write("header_name：{0}\n", header_name);
 
-            //! get tag flag.
-            byte[] tag_flag_byte = new byte[4];
-            br.Read(tag_flag_byte, 0, 1);
-            converIntValue(ref tag_bit, tag_flag_byte, 0);
-            data.tag_flag = tag_bit & 0x000000FF;
-            Console.Write("data.tag_flag：0x{0:x8}\n", data.tag_flag);
+            //! header version.
+            short header_version = BitConverter.ToInt16(header_byte, 3);
+            Console.Write("header_version：0x{0:x8} {1}\n", header_version, sizeof(short));
 
-            //! get tag size.
-            byte[] tag_size_byte = new byte[4];
-            br.Read(tag_size_byte, 0, 4);
-            converIntValue(ref tag_bit, tag_size_byte, 0);
-            data.tag_size = (int)(tag_bit & 0xf7f7f7f7);
-            Console.Write("data.tag_size：0x{0:x8}, {1}\n", data.tag_size, data.tag_size);
+            //! header flag.
+            Console.Write("header_flag：0x{0:x8} {1}\n", header_byte[5], sizeof(byte));
+
+            //! header size.
+            int header_size = 0;
+            byte[] byte_switch = new byte[4];
+            byte byte_set_offset = 0;
+            for (int count = 0; count < 4; count++)
+            {
+                byte_switch[count] = (byte)(header_byte[count + 6] & 0x7f);
+            }
+            byte_set_offset = (byte)(byte_switch[2] << 7);
+            byte_switch[3] = (byte)(byte_switch[3] | byte_set_offset);
+            byte_switch[2] = (byte)(byte_switch[2] >> 1);
+
+            byte_set_offset = (byte)(byte_switch[1] << 6);
+            byte_switch[2] = (byte)(byte_switch[2] | byte_set_offset);
+            byte_switch[1] = (byte)(byte_switch[1] >> 2);
+
+            byte_set_offset = (byte)(byte_switch[0] << 5);
+            byte_switch[1] = (byte)(byte_switch[1] | byte_set_offset);
+            byte_switch[0] = (byte)(byte_switch[0] >> 3);
+
+            converIntValue(ref header_size, byte_switch, 0);
+            Console.Write("header_size：{0}\n", header_size);
+            Console.Write("header_size  ：0x{0:x2}{1:x2}{2:x2}{3:x2}\n", header_byte[6], header_byte[7], header_byte[8], header_byte[9]);
+            Console.Write("header_switch：0x{0:x2}{1:x2}{2:x2}{3:x2}\n", byte_switch[0], byte_switch[1], byte_switch[2], byte_switch[3]);
+
+            byte[] byte_id3v2_tag = new byte[header_size];
+            br.Read(byte_id3v2_tag, 0, header_size);
+
+#if false
+            //! frame.
+            int frame_check = 0;
+            byte[] byte_frame;
+            string frame_name;
+            int frame_size = 0;
+            byte[] byte_data;
+            while (true)
+            {
+                Console.Write("frame_check：{0}\n", frame_check);
+                byte_frame = new byte[6];
+                br.Read(byte_frame, 0, 6);
+                Console.Write("byte_frame：0x{0:x2}{1:x2}{2:x2}{3:x2}{4:x2}{5:x2}\n", byte_frame[0], byte_frame[1], byte_frame[2], byte_frame[3], byte_frame[4], byte_frame[5]);
+                frame_name = Encoding.ASCII.GetString(byte_frame, 0, 3);
+                Console.Write("frame_name：{0}\n", frame_name);
+                byte_frame[2] = (byte)(byte_frame[2] & 0x00);
+                for (int count = 0; count < 4; count++)
+                {
+                    byte_switch[count] = byte_frame[count + 2];
+                }
+                converIntValue(ref frame_size, byte_switch, 0);
+                Console.Write("frame_size：{0}\n", frame_size);
+                byte_data = new byte[frame_size];
+                br.Read(byte_data, 0, frame_size);
+                frame_check += frame_size;
+            }
+#endif
         }
 
         private void converIntValue(ref int bit, byte[] info, int size)
