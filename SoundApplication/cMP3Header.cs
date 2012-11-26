@@ -92,6 +92,9 @@ namespace SoundApplication
         private int[] samplingLSF = new int[] { 22050, 24000, 16000, 0 };
         private int[] samplingHSF = new int[] { 44100, 48000, 32000, 0 };
 
+        //! common func.
+        cCommonFunc common_func = new cCommonFunc();
+
         public void readMp3Data(ref sMP3Data data, string filename)
         {
             //! file open.
@@ -106,7 +109,7 @@ namespace SoundApplication
             //! get header info.
             byte[] header_byte = new byte[sizeof(int)];
             br.Read(header_byte, 0, sizeof(int));
-            converIntValue(ref data.frame_bit, header_byte, 0);
+            common_func.converIntValue(ref data.frame_bit, header_byte, 0);
             Console.Write("header：0x{0:x8} {1}\n", data.frame_bit, sizeof(int));
 
             //! get ID-bit.
@@ -270,7 +273,7 @@ namespace SoundApplication
             byte_switch[1] = (byte)(byte_switch[1] | byte_set_offset);
             byte_switch[0] = (byte)(byte_switch[0] >> 3);
 
-            converIntValue(ref header_size, byte_switch, 0);
+            common_func.converIntValue(ref header_size, byte_switch, 0);
             Console.Write("header_size：{0}\n", header_size);
             Console.Write("header_size  ：0x{0:x2}{1:x2}{2:x2}{3:x2}\n", header_byte[6], header_byte[7], header_byte[8], header_byte[9]);
             Console.Write("header_switch：0x{0:x2}{1:x2}{2:x2}{3:x2}\n", byte_switch[0], byte_switch[1], byte_switch[2], byte_switch[3]);
@@ -305,18 +308,6 @@ namespace SoundApplication
                 frame_check += frame_size;
             }
 #endif
-        }
-
-        private void converIntValue(ref int bit, byte[] info, int size)
-        {
-            if (BitConverter.IsLittleEndian)
-            {
-                bit = BitConverter.ToInt32(info.Reverse().ToArray(), size);
-            }
-            else
-            {
-                bit = BitConverter.ToInt32(info, size);
-            }
         }
     }
 }

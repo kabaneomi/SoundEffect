@@ -51,6 +51,7 @@
     <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="cCommonFunc.cs" />
     <Compile Include="cMP3Header.cs" />
     <Compile Include="cSoundEffectResound.cs" />
     <Compile Include="cWaveHeader.cs" />

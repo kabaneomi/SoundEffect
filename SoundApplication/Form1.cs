@@ -21,7 +21,7 @@ namespace SoundApplication
         AxWMPLib.AxWindowsMediaPlayer test = new AxWMPLib.AxWindowsMediaPlayer();
         cWavePcm wave_pcm = new cWavePcm();
         cWavePcm reverve_pcm = new cWavePcm();
-        cMP3Data mp3_data = new cMP3Data();
+        sMP3Data mp3_data = new sMP3Data();
         cSoundEffectResound resound = new cSoundEffectResound();
 
         public Form1()
