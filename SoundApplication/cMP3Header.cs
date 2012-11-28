@@ -62,6 +62,12 @@ namespace SoundApplication
 
     public struct sMP3Data
     {
+        public byte[] mb_HeaderID3v2;
+        public short mh_ID3v2Version;
+        public short mh_ID3v2Flag;
+        public int mh_ID3v2Size;
+        public byte[] mb_ID3v2TagInfo;
+
         public string tag_name;
         public int tag_version;
         public int tag_flag;
@@ -102,11 +108,74 @@ namespace SoundApplication
             BinaryReader br = new BinaryReader(fs);
             Console.Write("mp3 file name：{0}\n", filename);
 
-            //! tag check.
+            //! analyze ID3v2tag.
             FileStream tag_fs = new FileStream(filename, FileMode.Open, FileAccess.Read);
-            checkTag(ref tag_fs, ref br, ref data);
+            analyzeID3v2(ref tag_fs, ref br, ref data);
 
             //! get header info.
+            analyzeFrameHeader(ref br, ref data);
+        }
+
+        //! analyze ID3v2tag.
+        private void analyzeID3v2(ref FileStream fs, ref BinaryReader br, ref sMP3Data data)
+        {
+            BinaryReader tag_br = new BinaryReader(fs);
+
+            byte[] tag_byte = new byte[3];
+            tag_br.Read(tag_byte, 0, 3);
+            string tag_name = Encoding.ASCII.GetString(tag_byte);
+            Console.Write("tag：{0}\n", tag_name);
+
+            //! "ID3" check.
+            if (tag_name != "ID3")
+            {
+                data.tag_name = "";
+                return;
+            }
+
+            data.mb_HeaderID3v2 = new byte[10];
+            br.Read(data.mb_HeaderID3v2, 0, 10);
+            Console.Write("header_byte：0x");
+            for (int count = 0; count < 10; count++)
+            {
+                Console.Write("{0:x2}", data.mb_HeaderID3v2[count]);
+            }
+            Console.Write("\n");
+
+            //! header name.
+            string header_name = Encoding.ASCII.GetString(data.mb_HeaderID3v2, 0, 3);
+            Console.Write("header_name：{0}\n", header_name);
+            //! header version.
+            data.mh_ID3v2Version = BitConverter.ToInt16(data.mb_HeaderID3v2, 3);
+            Console.Write("header_version：0x{0:x8}\n", data.mh_ID3v2Version);
+            //! header flag.
+            Console.Write("header_flag：0x{0:x8}\n", data.mb_HeaderID3v2[5]);
+            //! header size.
+            byte[] byte_switch = new byte[4];
+            byte byte_set_offset = 0;
+            for (int count = 0; count < 4; count++)
+            {
+                byte_switch[count] = (byte)(data.mb_HeaderID3v2[count + 6] & 0x7f);
+            }
+            for (int count = 0; count < 3; count++)
+            {
+                byte_set_offset = (byte)(byte_switch[2-count] << (7-count));
+                byte_switch[3-count] = (byte)(byte_switch[3-count] | byte_set_offset);
+                byte_switch[2-count] = (byte)(byte_switch[2-count] >> (1+count));
+            }
+
+            common_func.converIntValue(ref data.mh_ID3v2Size, byte_switch, 0);
+            Console.Write("header_size：{0}\n", data.mh_ID3v2Size);
+            Console.Write("header_size  ：0x{0:x2}{1:x2}{2:x2}{3:x2}\n", data.mb_HeaderID3v2[6], data.mb_HeaderID3v2[7], data.mb_HeaderID3v2[8], data.mb_HeaderID3v2[9]);
+            Console.Write("header_switch：0x{0:x2}{1:x2}{2:x2}{3:x2}\n", byte_switch[0], byte_switch[1], byte_switch[2], byte_switch[3]);
+
+            data.mb_ID3v2TagInfo = new byte[data.mh_ID3v2Size];
+            br.Read(data.mb_ID3v2TagInfo, 0, data.mh_ID3v2Size);
+        }
+
+        //! analyze frame header.
+        private void analyzeFrameHeader(ref BinaryReader br, ref sMP3Data data)
+        {
             byte[] header_byte = new byte[sizeof(int)];
             br.Read(header_byte, 0, sizeof(int));
             common_func.converIntValue(ref data.frame_bit, header_byte, 0);
@@ -129,7 +198,7 @@ namespace SoundApplication
             {
                 case eLayerBit.Layer3:
                 case eLayerBit.Layer2:
-                    if(protection_bit == 0)
+                    if (protection_bit == 0)
                     {
                         data.protection_bit = eProtectionBit.ISOProt0_Layer2or3;
                     }
@@ -194,7 +263,7 @@ namespace SoundApplication
             int private_bit = data.frame_bit & 0x00000100;
             private_bit = private_bit >> 8;
             data.private_bit = private_bit;
-            
+
             //! Mode Bit.
             int mode_bit = data.frame_bit & 0x000000C0;
             mode_bit = mode_bit >> 6;
@@ -221,66 +290,9 @@ namespace SoundApplication
             data.emphasis_bit = (eEmphasis)emphasis_bit;
         }
 
-        //! tag check.
-        private void checkTag(ref FileStream fs, ref BinaryReader br, ref sMP3Data data)
+        //! search ID3v2tag info.
+        public void searchID3v2(sMP3Data data, string tag)
         {
-            BinaryReader tag_br = new BinaryReader(fs);
-
-            byte[] tag_byte = new byte[3];
-            tag_br.Read(tag_byte, 0, 3);
-            string tag_name = Encoding.ASCII.GetString(tag_byte);
-            Console.Write("tag：{0}\n", tag_name);
-
-            //! "ID3" check.
-            if (tag_name != "ID3")
-            {
-                data.tag_name = "";
-                return;
-            }
-
-            byte[] header_byte = new byte[10];
-            br.Read(header_byte, 0, 10);
-            Console.Write("header_byte：0x{0:x2}{1:x2}{2:x2}{3:x2}{4:x2}{5:x2}{6:x2}{7:x2}{8:x2}{9:x2}\n", header_byte[0], header_byte[1], header_byte[2], header_byte[3], header_byte[4], header_byte[5], header_byte[6], header_byte[7], header_byte[8], header_byte[9]);
-
-            //! header name.
-            string header_name = Encoding.ASCII.GetString(header_byte, 0, 3);
-            Console.Write("header_name：{0}\n", header_name);
-
-            //! header version.
-            short header_version = BitConverter.ToInt16(header_byte, 3);
-            Console.Write("header_version：0x{0:x8} {1}\n", header_version, sizeof(short));
-
-            //! header flag.
-            Console.Write("header_flag：0x{0:x8} {1}\n", header_byte[5], sizeof(byte));
-
-            //! header size.
-            int header_size = 0;
-            byte[] byte_switch = new byte[4];
-            byte byte_set_offset = 0;
-            for (int count = 0; count < 4; count++)
-            {
-                byte_switch[count] = (byte)(header_byte[count + 6] & 0x7f);
-            }
-            byte_set_offset = (byte)(byte_switch[2] << 7);
-            byte_switch[3] = (byte)(byte_switch[3] | byte_set_offset);
-            byte_switch[2] = (byte)(byte_switch[2] >> 1);
-
-            byte_set_offset = (byte)(byte_switch[1] << 6);
-            byte_switch[2] = (byte)(byte_switch[2] | byte_set_offset);
-            byte_switch[1] = (byte)(byte_switch[1] >> 2);
-
-            byte_set_offset = (byte)(byte_switch[0] << 5);
-            byte_switch[1] = (byte)(byte_switch[1] | byte_set_offset);
-            byte_switch[0] = (byte)(byte_switch[0] >> 3);
-
-            common_func.converIntValue(ref header_size, byte_switch, 0);
-            Console.Write("header_size：{0}\n", header_size);
-            Console.Write("header_size  ：0x{0:x2}{1:x2}{2:x2}{3:x2}\n", header_byte[6], header_byte[7], header_byte[8], header_byte[9]);
-            Console.Write("header_switch：0x{0:x2}{1:x2}{2:x2}{3:x2}\n", byte_switch[0], byte_switch[1], byte_switch[2], byte_switch[3]);
-
-            byte[] byte_id3v2_tag = new byte[header_size];
-            br.Read(byte_id3v2_tag, 0, header_size);
-
 #if false
             //! frame.
             int frame_check = 0;
