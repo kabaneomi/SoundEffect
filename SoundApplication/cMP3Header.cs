@@ -101,6 +101,8 @@ namespace SoundApplication
         //! common func.
         cCommonFunc common_func = new cCommonFunc();
 
+
+        //! analyze start mp3.
         public void readMp3Data(ref sMP3Data data, string filename)
         {
             //! file open.
@@ -288,24 +290,42 @@ namespace SoundApplication
             int emphasis_bit = data.frame_bit & 0x00000003;
             Console.Write("emphasis_bit：0x{0:x8} {1}\n", emphasis_bit, sizeof(int));
             data.emphasis_bit = (eEmphasis)emphasis_bit;
+
+
+            //! frame tag checktest.
+            byte[] get_info = null;
+            int info_size = 0;
+            bool ret = searchID3v2(ref get_info, ref info_size, data, "TSS");
+            if (ret)
+            {
+                string tss_name;
+                tss_name = Encoding.ASCII.GetString(get_info, 1, info_size-1);
+                Console.Write("string_code_bit：0x{0:x2}\n", get_info[0]);
+                Console.Write("tss_name：{0}\n", tss_name);
+            }
         }
 
         //! search ID3v2tag info.
-        public void searchID3v2(sMP3Data data, string tag)
+        public bool searchID3v2(ref byte[] byte_info, ref int info_size, sMP3Data data, string tag)
         {
-#if false
-            //! frame.
             int frame_check = 0;
-            byte[] byte_frame;
+            byte[] byte_frame = new byte[6];
             string frame_name;
+            byte[] byte_switch = new byte[4];
             int frame_size = 0;
-            byte[] byte_data;
+            int compare = 0;
             while (true)
             {
+                //! frame size over break.
+                if (frame_check >= data.mh_ID3v2Size) break;
                 Console.Write("frame_check：{0}\n", frame_check);
-                byte_frame = new byte[6];
-                br.Read(byte_frame, 0, 6);
+                //! frame name & size check.
+                for (int count = 0; count < 6; count++)
+                {
+                    byte_frame[count] = data.mb_ID3v2TagInfo[frame_check + count];
+                }
                 Console.Write("byte_frame：0x{0:x2}{1:x2}{2:x2}{3:x2}{4:x2}{5:x2}\n", byte_frame[0], byte_frame[1], byte_frame[2], byte_frame[3], byte_frame[4], byte_frame[5]);
+                //! frame name check.
                 frame_name = Encoding.ASCII.GetString(byte_frame, 0, 3);
                 Console.Write("frame_name：{0}\n", frame_name);
                 byte_frame[2] = (byte)(byte_frame[2] & 0x00);
@@ -313,13 +333,19 @@ namespace SoundApplication
                 {
                     byte_switch[count] = byte_frame[count + 2];
                 }
-                converIntValue(ref frame_size, byte_switch, 0);
+                common_func.converIntValue(ref frame_size, byte_switch, 0);
                 Console.Write("frame_size：{0}\n", frame_size);
-                byte_data = new byte[frame_size];
-                br.Read(byte_data, 0, frame_size);
-                frame_check += frame_size;
+                compare = string.Compare(tag, frame_name);
+                if (compare == 0)
+                {
+                    byte_info = new byte[frame_size];
+                    info_size = frame_size;
+                    Array.Copy(data.mb_ID3v2TagInfo, frame_check + 6, byte_info, 0, frame_size);
+                    return true;
+                }
+                frame_check += frame_size + 6;
             }
-#endif
+            return false;
         }
     }
 }
