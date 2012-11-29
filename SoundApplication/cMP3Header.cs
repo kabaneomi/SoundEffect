@@ -112,14 +112,19 @@ namespace SoundApplication
 
             //! analyze ID3v2tag.
             FileStream tag_fs = new FileStream(filename, FileMode.Open, FileAccess.Read);
-            analyzeID3v2(ref tag_fs, ref br, ref data);
+            bool ver_check = analyzeID3v2(ref tag_fs, ref br, ref data);
+            //! mp3 analyze version 2.2 only.
+            if (!ver_check)
+            {
+                return;
+            }
 
             //! get header info.
             analyzeFrameHeader(ref br, ref data);
         }
 
         //! analyze ID3v2tag.
-        private void analyzeID3v2(ref FileStream fs, ref BinaryReader br, ref sMP3Data data)
+        private bool analyzeID3v2(ref FileStream fs, ref BinaryReader br, ref sMP3Data data)
         {
             BinaryReader tag_br = new BinaryReader(fs);
 
@@ -132,7 +137,7 @@ namespace SoundApplication
             if (tag_name != "ID3")
             {
                 data.tag_name = "";
-                return;
+                return true;
             }
 
             data.mb_HeaderID3v2 = new byte[10];
@@ -150,6 +155,10 @@ namespace SoundApplication
             //! header version.
             data.mh_ID3v2Version = BitConverter.ToInt16(data.mb_HeaderID3v2, 3);
             Console.Write("header_version：0x{0:x8}\n", data.mh_ID3v2Version);
+            if (data.mh_ID3v2Version != 2)
+            {
+                return false;
+            }
             //! header flag.
             Console.Write("header_flag：0x{0:x8}\n", data.mb_HeaderID3v2[5]);
             //! header size.
@@ -173,6 +182,8 @@ namespace SoundApplication
 
             data.mb_ID3v2TagInfo = new byte[data.mh_ID3v2Size];
             br.Read(data.mb_ID3v2TagInfo, 0, data.mh_ID3v2Size);
+
+            return true;
         }
 
         //! analyze frame header.
