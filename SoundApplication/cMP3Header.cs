@@ -8,10 +8,12 @@ using System.Diagnostics;
 namespace SoundApplication
 {
     //! ID-bit.
-    public enum eIDBit
+    public enum eMPEGVer
     {
-        LSF = 0,    //! MPEG-2.
-        HSF,        //! MPEG-1.
+        SecondHalf = 0,    //! MPEG version 2.5.
+        None,              //! None.
+        Second,            //! MPEG version 2.
+        First,             //! MPEG version 1.
     }
 
     //! Layer.
@@ -45,10 +47,10 @@ namespace SoundApplication
     //! ModeBit DualChannel ON.
     public enum eModeExtension
     {
-        Subband4 = 0,
-        Subband8,
-        Subband12,
-        Subband16,
+        Subband4 = 0,   //! 4 - 31.
+        Subband8,       //! 8 - 31.
+        Subband12,      //! 12 - 31.
+        Subband16,      //! 16 - 31.
     }
 
     //! Emphasis.
@@ -57,7 +59,7 @@ namespace SoundApplication
         None = 0,       //! emphasis None.
         FifthFifteen,   //! 50/15us.
         Reserve,        //! reserve.
-        CCITT_J17,      //! CCITT J17.
+        CCITT_J17,      //! CCITT revise form.
     }
 
     public struct sMP3Data
@@ -74,11 +76,11 @@ namespace SoundApplication
         public int tag_size;
 
         public int frame_bit;  //! mp3 header frame.
-        public eIDBit id_bit;
+        public eMPEGVer mpeg_ver;
         public eLayerBit layer_bit;
         public eProtectionBit protection_bit;
         public int bitrate;
-        public int sampling;
+        public int samplingrate;
         public int padding_bit;    //! 0 = None, 1 = Add.
         public int private_bit;    //! 0 = None, 1 = Use.
         public eModeBit mode_bit;
@@ -90,13 +92,21 @@ namespace SoundApplication
 
     public class cMP3Header
     {
-        //! Bitrate Table.
-        private int[] bitrateTableLSF = new int[] { 0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 64, 128, 144, 160, 0 };
-        private int[] bitrateTableHSF = new int[] { 0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0 };
+        //! Bitrate Table(V = MPEG ver, L = Layer ver).
+        private int[][] m_BitRateTable = new int[][] { 
+            new int[]{0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, -1},    //! V1,L1.
+            new int[]{0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, -1},       //! V1,L2.
+            new int[]{0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, -1},        //! V1,L3.
+            new int[]{0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256, -1},       //! V2,L1.
+            new int[]{0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, -1}             //! V2,L2&L3.
+        };
 
         //! Sampling Frequency.
-        private int[] samplingLSF = new int[] { 22050, 24000, 16000, 0 };
-        private int[] samplingHSF = new int[] { 44100, 48000, 32000, 0 };
+        private int[][] m_SamplingRateTable = new int[][] {
+            new int[]{44100, 48000, 32000, 0},  //! MPEG1.
+            new int[]{22050, 24000, 16000, 0},  //! MPEG2.
+            new int[]{11025, 12000, 8000, 0}    //! MPEG2.5.
+        };
 
         //! common func.
         cCommonFunc common_func = new cCommonFunc();
@@ -187,122 +197,139 @@ namespace SoundApplication
         }
 
         //! analyze frame header.
-        private void analyzeFrameHeader(ref BinaryReader br, ref sMP3Data data)
+        private bool analyzeFrameHeader(ref BinaryReader br, ref sMP3Data data)
         {
-            byte[] header_byte = new byte[sizeof(int)];
-            br.Read(header_byte, 0, sizeof(int));
+            //! header 4byte.
+            byte[] header_byte = new byte[4];
+            br.Read(header_byte, 0, 4);
             common_func.converIntValue(ref data.frame_bit, header_byte, 0);
             Console.Write("header：0x{0:x8} {1}\n", data.frame_bit, sizeof(int));
 
             //! get ID-bit.
-            int id_bit = data.frame_bit & 0x00080000;
-            id_bit = id_bit >> 19;
-            data.id_bit = (eIDBit)id_bit;
+            int mpeg_ver = data.frame_bit & 0x00180000;
+            mpeg_ver = mpeg_ver >> 19;
+            data.mpeg_ver = (eMPEGVer)mpeg_ver;
+            Console.Write("mpeg_ver：0x{0:x8}\n", mpeg_ver);
 
             //! get Layer-bit.
             int layer_bit = data.frame_bit & 0x00060000;
             layer_bit = layer_bit >> 17;
             data.layer_bit = (eLayerBit)layer_bit;
+            Console.Write("layer_bit：0x{0:x8}\n", layer_bit);
 
             //! Protection-Bit.
             int protection_bit = data.frame_bit & 0x00010000;
             protection_bit = protection_bit >> 16;
-            switch (data.layer_bit)
-            {
-                case eLayerBit.Layer3:
-                case eLayerBit.Layer2:
-                    if (protection_bit == 0)
-                    {
-                        data.protection_bit = eProtectionBit.ISOProt0_Layer2or3;
-                    }
-                    else
-                    {
-                        data.protection_bit = eProtectionBit.ISOProt1_Layer2or3;
-                    }
-                    break;
-                case eLayerBit.Layer1:
-                    if (protection_bit == 0)
-                    {
-                        data.protection_bit = eProtectionBit.ISOProt0_Layer1;
-                    }
-                    else
-                    {
-                        data.protection_bit = eProtectionBit.ISOProt1_Layer1;
-                    }
-                    break;
-                default:
-                    Debug.Assert(false, "Protection Bit None?");
-                    break;
-            }
+            data.protection_bit = (eProtectionBit)protection_bit;
+            Console.Write("protection_bit：0x{0:x8}\n", protection_bit);
 
-            //! Bitrate.
-            int bitrate_bit = data.frame_bit & 0x0000F000;
-            bitrate_bit = bitrate_bit >> 12;
-            switch (data.id_bit)
+            //! BitRateTable.
+            int bitrate = data.frame_bit & 0x0000F000;
+            bitrate = bitrate >> 12;
+            if (data.mpeg_ver == eMPEGVer.First)
             {
-                case eIDBit.LSF:
-                    data.bitrate = bitrateTableLSF[bitrate_bit];
-                    break;
-                case eIDBit.HSF:
-                    data.bitrate = bitrateTableHSF[bitrate_bit];
-                    break;
-                default:
-                    break;
+                switch (data.layer_bit)
+                {
+                    case eLayerBit.Layer1:
+                        data.bitrate = m_BitRateTable[0][bitrate];
+                        break;
+                    case eLayerBit.Layer2:
+                        data.bitrate = m_BitRateTable[1][bitrate];
+                        break;
+                    case eLayerBit.Layer3:
+                        data.bitrate = m_BitRateTable[2][bitrate];
+                        break;
+                    default:
+                        Console.Write("Get Bitrate : None Layer\n");
+                        break;
+                }
+            }
+            else if (data.mpeg_ver == eMPEGVer.Second || data.mpeg_ver == eMPEGVer.SecondHalf)
+            {
+                switch (data.layer_bit)
+                {
+                    case eLayerBit.Layer1:
+                        data.bitrate = m_BitRateTable[3][bitrate];
+                        break;
+                    case eLayerBit.Layer2:
+                    case eLayerBit.Layer3:
+                        data.bitrate = m_BitRateTable[4][bitrate];
+                        break;
+                    default:
+                        Console.Write("Get Bitrate : None Layer\n");
+                        break;
+                }
+            }
+            else
+            {
+                Console.Write("MPEG ver None BitrateTable\n");
+                return false;
             }
             Console.Write("bitrate：{0}\n", data.bitrate);
 
             //! Sampling Frequency.
-            int sampling_bit = data.frame_bit & 0x00000C00;
-            sampling_bit = sampling_bit >> 10;
-            switch (data.id_bit)
+            int sampling = data.frame_bit & 0x00000C00;
+            sampling = sampling >> 10;
+            switch (data.mpeg_ver)
             {
-                case eIDBit.LSF:
-                    data.sampling = samplingLSF[sampling_bit];
+                case eMPEGVer.First:
+                    data.samplingrate = m_SamplingRateTable[0][sampling];
                     break;
-                case eIDBit.HSF:
-                    data.sampling = samplingHSF[sampling_bit];
+                case eMPEGVer.Second:
+                    data.samplingrate = m_SamplingRateTable[1][sampling];
+                    break;
+                case eMPEGVer.SecondHalf:
+                    data.samplingrate = m_SamplingRateTable[2][sampling];
                     break;
                 default:
+                    Console.Write("MPEG ver None SamplingRateTable\n");
                     break;
             }
-            Console.Write("sampling：{0}\n", data.sampling);
+            Console.Write("sampling：{0}\n", data.samplingrate);
 
             //! Padding Bit.
-            int padding_bit = data.frame_bit & 0x00000300;
+            int padding_bit = data.frame_bit & 0x00000200;
             padding_bit = padding_bit >> 9;
             data.padding_bit = padding_bit;
+            Console.Write("padding_bit：0x{0:x8}\n", data.padding_bit);
 
             //! Private Bit.
             int private_bit = data.frame_bit & 0x00000100;
             private_bit = private_bit >> 8;
             data.private_bit = private_bit;
+            Console.Write("private_bit：0x{0:x8}\n", data.private_bit);
 
             //! Mode Bit.
             int mode_bit = data.frame_bit & 0x000000C0;
             mode_bit = mode_bit >> 6;
             data.mode_bit = (eModeBit)mode_bit;
+            Console.Write("mode_bit：0x{0:x8}\n", mode_bit);
 
             //! ModeExtension Bit.
             int modeEx_bit = data.frame_bit & 0x00000030;
             modeEx_bit = modeEx_bit >> 4;
             data.modeEx_bit = (eModeExtension)modeEx_bit;
+            Console.Write("modeEx_bit：0x{0:x8}\n", modeEx_bit);
 
             //! Copyright.
             int copyright_bit = data.frame_bit & 0x00000008;
             copyright_bit = copyright_bit >> 3;
             data.copyright_bit = copyright_bit;
+            Console.Write("copyright_bit：0x{0:x8}\n", data.copyright_bit);
 
             //! Original Check.
             int original_bit = data.frame_bit & 0x00000004;
             original_bit = original_bit >> 2;
             data.original_bit = original_bit;
+            Console.Write("original_bit：0x{0:x8}\n", data.original_bit);
 
             //! Emphasis Bit.
             int emphasis_bit = data.frame_bit & 0x00000003;
-            Console.Write("emphasis_bit：0x{0:x8} {1}\n", emphasis_bit, sizeof(int));
             data.emphasis_bit = (eEmphasis)emphasis_bit;
+            Console.Write("emphasis_bit：0x{0:x8}\n", emphasis_bit);
 
-
+            return true;
+#if false
             //! frame tag checktest.
             byte[] get_info = null;
             int info_size = 0;
@@ -314,6 +341,7 @@ namespace SoundApplication
                 Console.Write("string_code_bit：0x{0:x2}\n", get_info[0]);
                 Console.Write("tss_name：{0}\n", tss_name);
             }
+#endif
         }
 
         //! search ID3v2tag info.
